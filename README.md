@@ -25,4 +25,4 @@ Users are needed to provide the following features on which the predicting model
 #### The API /Predictprice endpoint takes the above-mentioned information as input and returns the predicted rental price of the car.
 
   -The output is JSON object with the predicted price.
-      * Example: {"predicted_price": 49.99}
+      Example: {"predicted_price": 49.99}
