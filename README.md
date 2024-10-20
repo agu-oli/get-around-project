@@ -3,7 +3,7 @@
 
 ## Car rental price predictor
 
-### This script runs a API that allows users to predict the price of a car rental.
+### The app.py script runs a API that allows users to predict the price of a car rental.
 
 Users are needed to provide the following features on which the predicting model was trained on:
 
