@@ -1,113 +1,98 @@
 import uvicorn
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI
 from pydantic import BaseModel
 import pandas as pd
-import mlflow
-
-import pandas as pd
 from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import LinearRegression
 import joblib
-import json
-from typing import List
 
-# Define the preprocessor outside the function if it's not going to change
-#preprocessor = joblib.load('preprocessor.joblib')
-#model = joblib.load('linear_regression_model.joblib')
+# Define the CarDetails model
+class CarDetails(BaseModel):
+    model_key: str
+    mileage: float
+    engine_power: float
+    fuel: str
+    paint_color: str
+    car_type: str
+    private_parking_available: bool
+    has_gps: bool
+    has_air_conditioning: bool
+    automatic_car: bool
+    has_getaround_connect: bool
+    has_speed_regulator: bool
+    winter_tires: bool
 
-# Helper function to create DataFrame
-def preprocessing (model_key: str,
-                            mileage: float,
-                           engine_power: float,
-                           fuel: str,
-                           paint_color: str,
-                           car_type: str,
-                           private_parking_available: bool,
-                           has_gps: bool,
-                           has_air_conditioning: bool,
-                           automatic_car: bool,
-                           has_getaround_connect: bool,
-                           has_speed_regulator: bool,
-                           winter_tires: bool): #-> pd.DataFrame:
+    class Config:
+        protected_namespaces = ()
 
+# Define the input model for the prediction
+class CarInput(BaseModel):
+    input: list[list]  # Expecting a list of lists
+
+class PredictionResponse(BaseModel):
+    prediction: list[float]    
+
+# Load the preprocessor and model once
+
+preprocessor = joblib.load('preprocessor.joblib')
+model = joblib.load('linear_regression_model.joblib')
+
+# Define the preprocessor function
+def preprocessing(car_details: CarDetails):
     data = {
-        'model_key': [model_key],
-        'mileage': [mileage],
-        'engine_power': [engine_power],
-        'fuel': [fuel],
-        'paint_color': [paint_color],
-        'car_type': [car_type],
-        'private_parking_available': [private_parking_available],
-        'has_gps': [has_gps],
-        'has_air_conditioning': [has_air_conditioning],
-        'automatic_car': [automatic_car],
-        'has_getaround_connect': [has_getaround_connect],
-        'has_speed_regulator': [has_speed_regulator],
-        'winter_tires': [winter_tires]
+        'model_key': [car_details.model_key],
+        'mileage': [car_details.mileage],
+        'engine_power': [car_details.engine_power],
+        'fuel': [car_details.fuel],
+        'paint_color': [car_details.paint_color],
+        'car_type': [car_details.car_type],
+        'private_parking_available': [car_details.private_parking_available],
+        'has_gps': [car_details.has_gps],
+        'has_air_conditioning': [car_details.has_air_conditioning],
+        'automatic_car': [car_details.automatic_car],
+        'has_getaround_connect': [car_details.has_getaround_connect],
+        'has_speed_regulator': [car_details.has_speed_regulator],
+        'winter_tires': [car_details.winter_tires]
     }
+
     df = pd.DataFrame(data)
-    print(df)
 
+    # Transform boolean columns
     boolean_columns = [
-    'private_parking_available',
-    'has_gps',
-    'has_air_conditioning',
-    'automatic_car',
-    'has_getaround_connect',
-    'has_speed_regulator',
-    'winter_tires'
-]
-# Convert 'Yes' to 1 and 'No' to 0
+        'private_parking_available',
+        'has_gps',
+        'has_air_conditioning',
+        'automatic_car',
+        'has_getaround_connect',
+        'has_speed_regulator',
+        'winter_tires'
+    ]
+
     df[boolean_columns] = df[boolean_columns].replace({True: 1, False: 0})
-    print(df)
 
-    categorical_features = ['model_key','fuel','paint_color','car_type']
-
-    #numerical_features = df.columns.drop(categorical_features)
+    categorical_features = ['model_key', 'fuel', 'paint_color', 'car_type']
     numerical_features = ['mileage', 'engine_power'] + boolean_columns
 
-    #print (numerical_features)
-    numeric_transformer = Pipeline(steps=[
-    ('scaler', StandardScaler())
-])
 
-    categorical_transformer = Pipeline(
-    steps=[('encoder', OneHotEncoder(drop='first', handle_unknown='ignore')) # first column will be dropped to avoid creating correlations between features
-    ])
-    #print('print1')
 
-    preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numeric_transformer, numerical_features),
-        ('cat', categorical_transformer, categorical_features)
-    ])
-    #print(2)
+    # Recreate preprocessor
+    #preprocessor = ColumnTransformer(
+    #transformers=[
+    #    ('num', StandardScaler(), numerical_features),
+    #    ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
+    #]#)
 
-    preprocessor = joblib.load('preprocessor.joblib')
-    #print(3)
-    # Load the model from the file
-    model = joblib.load('linear_regression_model.joblib')
-  
+    # Preprocess the data
     x = preprocessor.transform(df)
-    print(x)
 
     # Make predictions
-    prediction = model.predict(x)  # Convert to list for JSON serializability
+    prediction = model.predict(x)
     prediction_rounded = [round(p, 2) for p in prediction]
-    # Return JSON response
-    result = ({"prediction": prediction_rounded})
 
-    return result
+    return {"prediction": prediction_rounded}
 
 
-
-### 
-# Here you can define some configurations 
-###
 description = """
 ## Provide us with the following in formation and we will be able to predict the price of your car rental:
 
@@ -128,12 +113,14 @@ description = """
 
 ## API Endpoint Documentation for "Get Around: Predict the Price of Your Car Rental"
 
-* Endpoint: /predict_price
+* Endpoints: 
+            /predict_price  (accessible via python and you terminal)
+            /predict_from_browser (insert the data and predict the price on your browser)   
 
 * HTTP Method: POST
 
 * Description: This endpoint takes car details as input and returns the predicted rental price of the car.
-    Required Input:
+    - Required Input:
     
         * brand (string): The brand of the car (e.g., "Toyota").
         * mileage (int): The mileage of the car in kilometers (e.g., 35000).
@@ -155,79 +142,78 @@ description = """
         Example: {"predicted_price": 49.99}
 
 
-
-
-
 """
-#tag_metadata = [
-#    {
-#        "name": "Name_1",
-#        "description": "LOREM IPSUM NEC."
-#    },
-
-#    {
-#        "name": "Name_2",
-#        "description": "LOREM IPSUM NEC."
-#    }
-#]
-
-app = FastAPI(
-    title = 'Get Around: predict the price of your car rental',
-    description = description, 
-    #openapi_tags=tag_metadata
-)
 
 
-#class PredictionFeatures(BaseModel):
-#    YearsExperience: float    
+# FastAPI app initialization
+app = FastAPI(title='Get Around: predict the price of your car rental',
+             description = description)
 
-###
-# Here you define enpoints 
-###
-@app.post("/predict", tags=["PredictPrice"])
+
+#@app.post("/predict_price", tags=["PredictPrice"])
+#async def PredictPrice(car_details: CarDetails): 
+@app.post("/predict_price")
+async def PredictPrice(car_input: CarInput):
+    input = car_input.input  # Extract the list from the CarInput object
+
+    # Extract details from the input list
+    car_details = CarDetails(
+        model_key=input[0][0],
+        mileage=input[0][1],
+        engine_power=input[0][2],
+        fuel=input[0][3],
+        paint_color=input[0][4],
+        car_type=input[0][5],
+        private_parking_available=bool(input[0][6]),
+        has_gps=bool(input[0][7]),
+        has_air_conditioning=bool(input[0][8]),
+        automatic_car=bool(input[0][9]),
+        has_getaround_connect=bool(input[0][10]),
+        has_speed_regulator=bool(input[0][11]),
+        winter_tires=bool(input[0][12]),
+    )
+
+    result = preprocessing(car_details)
+    return result
+
+
+
+
+@app.post("/predict_from_browser", response_model=PredictionResponse, tags=["PredictPrice"])
 async def PredictPrice(
-                       model_key: str, 
-                       mileage: float,
-                       engine_power: float,
-                       fuel: str,
-                       paint_color: str,
-                       car_type: str,
-                       private_parking_available: bool,
-                       has_gps: bool,
-                       has_air_conditioning: bool,
-                       automatic_car: bool,
-                       has_getaround_connect: bool,
-                       has_speed_regulator: bool,
-                       winter_tires: bool):
-    
+    model_key: str,
+    mileage: float,
+    engine_power: float,
+    fuel: str,
+    paint_color: str,
+    car_type: str,
+    private_parking_available: bool,
+    has_gps: bool,
+    has_air_conditioning: bool,
+    automatic_car: bool,
+    has_getaround_connect: bool,
+    has_speed_regulator: bool,
+    winter_tires: bool,
+):  
+    # Create a CarDetails object from the redeclared parameters
+    car_details = CarDetails(
+        model_key=model_key,
+        mileage=mileage,
+        engine_power=engine_power,
+        fuel=fuel,
+        paint_color=paint_color,
+        car_type=car_type,
+        private_parking_available=private_parking_available,
+        has_gps=has_gps,
+        has_air_conditioning=has_air_conditioning,
+        automatic_car=automatic_car,
+        has_getaround_connect=has_getaround_connect,
+        has_speed_regulator=has_speed_regulator,
+        winter_tires=winter_tires
+    )
 
-    result = preprocessing(model_key, mileage, engine_power, fuel, paint_color, car_type,
-                                     private_parking_available, has_gps, has_air_conditioning,
-                                     automatic_car, has_getaround_connect, has_speed_regulator,
-                                     winter_tires)
-    
-    return {"prediction": result}
-    """
-    Process a new text from Elon Musk and return a prediction of the evolution of the Tesla Quote.
-    """
-    #result = preprocessing(text, date, ouverture)
+    result = preprocessing(car_details)
+    return result
 
-
-#@app.post("/predict", tags=["Machine Learning"])
-#async def predict(predictionFeatures: PredictionFeatures):
-    """
-    Prediction of salary for a given year of experience! 
-    """
-    # Read data 
-    #years_experience = pd.DataFrame({"YearsExperience": [predictionFeatures.YearsExperience]})
-
-    # Log model from mlflow 
-    #logged_model = 'runs:/5e54b2ee620546b0914c9e9fbfd18875/salary_estimator'
-
-    # Load model as a PyFuncModel.
-    #loaded_model = mlflow.pyfunc.load_model(logged_model)
-    #prediction = loaded_model.predict(years_experience)
-    
-
-if __name__=="__main__":
+if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=4005)
