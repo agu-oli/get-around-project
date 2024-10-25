@@ -1,7 +1,12 @@
 # get-around-project
 
 
-## Car rental price predictor
+## This project includes 
+
+1) Exploratory data analysis (see eda.ipynb) presented in a streamlit dashboard
+    Check the dashboard in the following link: 
+    
+2) Car rental price predictor
 
 ### The app.py is the script of an API that allows users to predict the price of a car rental.
 
