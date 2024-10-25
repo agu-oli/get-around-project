@@ -27,7 +27,8 @@ Users are needed to provide the following features on which the predicting model
 
 #### The API /predict_price endpoint can be used on python with following code: 
 
-``import requests
+``
+import requests
 response = requests.post("https://get-around-app-2b184b2f74b6.herokuapp.com/predict_price", json={
     "input": [['Toyota', 140411, 100, 'diesel', 'black', 'convertible', 'yes', 'yes', 'no', 'no', 'yes', 'yes', 'yes']]
 })
