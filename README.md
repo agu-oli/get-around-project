@@ -3,7 +3,7 @@
 
 ## Car rental price predictor
 
-### The app.py script runs a API that allows users to predict the price of a car rental.
+### The app.py is the script of an API that allows users to predict the price of a car rental.
 
 Users are needed to provide the following features on which the predicting model was trained on:
 
@@ -21,8 +21,23 @@ Users are needed to provide the following features on which the predicting model
 * speed_regulator (bool): Whether the car has a speed regulator (e.g., "yes" or "no").
 * winter_tires (bool): Whether the car has winter tires (e.g., "yes" or "no").
 
-  
-#### The API /Predictprice endpoint takes the above-mentioned information as input and returns the predicted rental price of the car.
+* Errors in the request are treated with the corresponding correction in the respose body.
+
+#### This is the link of the API : https://get-around-app-2b184b2f74b6.herokuapp.com/docs
+
+#### The API /predict_price endpoint can be used on python with following code: 
+
+``import requests
+response = requests.post("https://get-around-app-2b184b2f74b6.herokuapp.com/predict_price", json={
+    "input": [['Toyota', 140411, 100, 'diesel', 'black', 'convertible', 'yes', 'yes', 'no', 'no', 'yes', 'yes', 'yes']]
+})
+print(response.json())``
+
+Or on terminal (Mac) in the following way:
+
+``curl -i -H "Content-Type: application/json" -X POST -d '{"input": [["Toyota", 140411, 100, "diesel", "black", "convertible", "yes", "yes", "no", "no", "yes", "yes", "yes"]]}' https://get-around-app-2b184b2f74b6.herokuapp.com/predict_price``
+
+#### The API /predict_from_browser endpoint, allows you predict the price of a car rental from your browser. It takes the above-mentioned information as input and returns the predicted rental price of the car.
 
   -The output is a JSON object with the predicted price.
       Example: {"predicted_price": 49.99}
