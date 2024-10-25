@@ -4,7 +4,9 @@
 ## This project includes 
 
 1) Exploratory data analysis (see eda.ipynb) presented in a streamlit dashboard
-    Check the dashboard in the following link: 
+    - Check the dashboard in the following link: 
+
+https://dashboard-deployment-deliverable-jedha.streamlit.app
     
 2) Car rental price predictor
 
