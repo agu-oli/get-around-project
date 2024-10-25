@@ -255,7 +255,7 @@ async def PredictPrice(
         result = preprocessing(car_details)
         return result
     except ValueError as e:
-        raise e  # This will be caught by the custom value error handler
+        raise e  
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=4005)
