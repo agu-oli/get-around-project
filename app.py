@@ -1,6 +1,10 @@
 import uvicorn
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator, ValidationError
+from fastapi.encoders import jsonable_encoder
+
+
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
@@ -9,12 +13,12 @@ import joblib
 
 # Define the CarDetails model
 class CarDetails(BaseModel):
-    model_key: str
-    mileage: float
-    engine_power: float
-    fuel: str
-    paint_color: str
-    car_type: str
+    brand: str
+    mileage: float = Field(..., gt=0, description="Mileage must be greater than zero.")
+    engine_power: float = Field(..., gt=0, description="Engine power must be greater than zero.")
+    fuel: str = Field(..., description="Fuel type of the car.")
+    paint_color: str = Field(..., description="Paint color of the car.")
+    car_type: str = Field(..., description="Type of car.")
     private_parking_available: bool
     has_gps: bool
     has_air_conditioning: bool
@@ -23,8 +27,35 @@ class CarDetails(BaseModel):
     has_speed_regulator: bool
     winter_tires: bool
 
-    class Config:
-        protected_namespaces = ()
+    @field_validator('brand')
+    def model_must_be_valid(cls, v):
+        valid_brand = ['citroën', 'peugeot', 'pgo', 'renault', 'audi', 'bmw', 'ford', 'mercedes', 'opel', 'porsche', 'volkswagen', 'kia motors', 'alfa romeo', 'ferrari', 'fiat', 'lamborghini', 'maserati', 'lexus', 'honda', 'mazda', 'mini', 'mitsubishi', 'nissan', 'seat', 'subaru', 'suzuki', 'toyota', 'yamaha']
+        if v.lower() not in valid_brand:
+            raise ValueError(f"Brand '{v}' is not valid. Choose from {valid_brand}")
+        return v.lower()
+
+    @field_validator('fuel')
+    def fuel_must_be_valid(cls, v):
+        valid_fuel_types = ['diesel', 'petrol', 'hybrid petrol', 'electro']
+        if v.lower() not in valid_fuel_types:
+            raise ValueError(f"Fuel type '{v}' is not valid. Choose from {valid_fuel_types}")
+        return v.lower()
+
+    @field_validator('paint_color')
+    def paint_color_must_be_valid(cls, v):
+        valid_colors = ['black', 'grey', 'white', 'red', 'silver', 'blue', 'orange', 'beige', 'brown', 'green']
+        if v.lower() not in valid_colors:
+            raise ValueError(f"Paint color '{v}' is not valid. Choose from {valid_colors}")
+        return v.lower()
+
+    @field_validator('car_type')
+    def car_type_must_be_valid(cls, v):
+        valid_car_types = ['convertible', 'coupe', 'estate', 'hatchback', 'sedan', 'subcompact', 'suv', 'van']
+        if v.lower() not in valid_car_types:
+            raise ValueError(f"Car type '{v}' is not valid. Choose from {valid_car_types}")
+        return v.lower()
+
+
 
 # Define the input model for the prediction
 class CarInput(BaseModel):
@@ -33,7 +64,6 @@ class CarInput(BaseModel):
 class PredictionResponse(BaseModel):
     prediction: list[float]    
 
-# Load the preprocessor and model once
 
 preprocessor = joblib.load('preprocessor.joblib')
 model = joblib.load('linear_regression_model.joblib')
@@ -41,7 +71,7 @@ model = joblib.load('linear_regression_model.joblib')
 # Define the preprocessor function
 def preprocessing(car_details: CarDetails):
     data = {
-        'model_key': [car_details.model_key],
+        'brand': [car_details.brand],
         'mileage': [car_details.mileage],
         'engine_power': [car_details.engine_power],
         'fuel': [car_details.fuel],
@@ -71,17 +101,9 @@ def preprocessing(car_details: CarDetails):
 
     df[boolean_columns] = df[boolean_columns].replace({True: 1, False: 0})
 
-    categorical_features = ['model_key', 'fuel', 'paint_color', 'car_type']
+    categorical_features = ['brand', 'fuel', 'paint_color', 'car_type']
     numerical_features = ['mileage', 'engine_power'] + boolean_columns
 
-
-
-    # Recreate preprocessor
-    #preprocessor = ColumnTransformer(
-    #transformers=[
-    #    ('num', StandardScaler(), numerical_features),
-    #    ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-    #]#)
 
     # Preprocess the data
     x = preprocessor.transform(df)
@@ -136,6 +158,8 @@ description = """
         * speed_regulator (bool): Whether the car has a speed regulator (e.g., "yes" or "no").
         * winter_tires (bool): Whether the car has winter tires (e.g., "yes" or "no").
 
+    - Errors in the request will be treated with the corresponding correction in the respose body.
+
 * Expected Output:
 
     - Response: JSON object with the predicted price of the car rental.
@@ -150,15 +174,30 @@ app = FastAPI(title='Get Around: predict the price of your car rental',
              description = description)
 
 
-#@app.post("/predict_price", tags=["PredictPrice"])
-#async def PredictPrice(car_details: CarDetails): 
+# the corresponding value error message will be shown if the input variables is not correct
+
+# exception handler for Pydantic ValidationError
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValueError):
+    error_message = exc.errors()[0]['msg']
+    return JSONResponse(
+        status_code=400,
+        content={"detail": error_message},
+    )
+
+    #return JSONResponse(
+    #    status_code=422,
+    #    content=jsonable_encoder({"detail": exc.errors()}),
+    #)
+
+
 @app.post("/predict_price")
 async def PredictPrice(car_input: CarInput):
     input = car_input.input  # Extract the list from the CarInput object
 
     # Extract details from the input list
     car_details = CarDetails(
-        model_key=input[0][0],
+        brand=input[0][0],
         mileage=input[0][1],
         engine_power=input[0][2],
         fuel=input[0][3],
@@ -181,7 +220,7 @@ async def PredictPrice(car_input: CarInput):
 
 @app.post("/predict_from_browser", response_model=PredictionResponse, tags=["PredictPrice"])
 async def PredictPrice(
-    model_key: str,
+    brand: str,
     mileage: float,
     engine_power: float,
     fuel: str,
@@ -194,26 +233,29 @@ async def PredictPrice(
     has_getaround_connect: bool,
     has_speed_regulator: bool,
     winter_tires: bool,
-):  
+):
+    try:   
     # Create a CarDetails object from the redeclared parameters
-    car_details = CarDetails(
-        model_key=model_key,
-        mileage=mileage,
-        engine_power=engine_power,
-        fuel=fuel,
-        paint_color=paint_color,
-        car_type=car_type,
-        private_parking_available=private_parking_available,
-        has_gps=has_gps,
-        has_air_conditioning=has_air_conditioning,
-        automatic_car=automatic_car,
-        has_getaround_connect=has_getaround_connect,
-        has_speed_regulator=has_speed_regulator,
-        winter_tires=winter_tires
-    )
+        car_details = CarDetails(
+            brand=brand,
+            mileage=mileage,
+            engine_power=engine_power,
+            fuel=fuel,
+            paint_color=paint_color,
+            car_type=car_type,
+            private_parking_available=private_parking_available,
+            has_gps=has_gps,
+            has_air_conditioning=has_air_conditioning,
+            automatic_car=automatic_car,
+            has_getaround_connect=has_getaround_connect,
+            has_speed_regulator=has_speed_regulator,
+            winter_tires=winter_tires
+        )
 
-    result = preprocessing(car_details)
-    return result
+        result = preprocessing(car_details)
+        return result
+    except ValueError as e:
+        raise e  # This will be caught by the custom value error handler
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=4005)
